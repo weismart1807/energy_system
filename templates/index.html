@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>電量評估系統</title>
+    <style>
+        /* 讓整個畫面稍微排版 */
+        body {
+            margin: 20px;
+            font-family: sans-serif;
+        }
+        header {
+            display: flex;
+            align-items: center;
+        }
+        header img {
+            width: 180px; /* 可依需求調整圖片大小 */
+            height: auto;
+            margin-right: 20px;
+        }
+        h1 {
+            margin: 0;
+        }
+        .form-container {
+            margin-top: 20px;
+        }
+        table {
+            border-collapse: collapse;
+        }
+        td {
+            padding: 10px;
+            vertical-align: middle;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+            text-align: right;
+            margin-right: 8px;
+        }
+        input[type="number"] {
+            width: 80px;
+        }
+        #result {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        async function submitForm(event) {
+            event.preventDefault();
+            
+            // 取得期數
+            const period = document.getElementById('period').value;
+            
+            // 依序取得六期的電量輸入
+            const consumptions = [];
+            for (let i = 1; i <= 6; i++) {
+                const input = document.getElementById('consumption' + i);
+                consumptions.push(input.value);
+            }
+            
+            // 發送請求到後端
+            const response = await fetch('/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    consumptions: consumptions,
+                    period: period
+                })
+            });
+            
+            const result = await response.json();
+            const resultDiv = document.getElementById('result');
+            
+            if (response.ok) {
+                resultDiv.innerHTML = `
+                    <div>最低日平均用電量的期數：第 ${result.min_index} 期</div>
+                    <div>最低日平均用電量：${result.min_daily_average.toFixed(2)} kWh</div>
+                    <div>最高日平均用電量的期數：第 ${result.max_index} 期</div>
+                    <div>最高日平均用電量：${result.max_daily_average.toFixed(2)} kWh</div>
+                    <div>最高日平均用電量為最低日平均用電量的 ${result.n_times.toFixed(2)} 倍</div>
+                `;
+                // 畫圖：用返回的 daily_averages 畫出曲線圖
+                const ctx = document.getElementById('myChart').getContext('2d');
+                
+                // 如果已有圖表，先銷毀再重建
+                if (window.myChartInstance) {
+                    window.myChartInstance.destroy();
+                }
+                
+                window.myChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['第1期','第2期','第3期','第4期','第5期','第6期'],
+                        datasets: [{
+                            label: '日平均用電量 (kWh/day)',
+                            data: result.daily_averages.map(x => Number(x)),
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                min: 0,    // 依據需求修改最小值
+                                max: 3 + parseFloat(result.max_daily_average.toFixed(2))  // 依據需求修改最大值
+                            }
+                        }
+                    }
+                });
+            } else {
+                resultDiv.innerHTML = `<p style="color:red;">錯誤：${result.error}</p>`;
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- 頂部區塊：左上方放您的圖片，右側可以放標題等 -->
+    <header>
+        <!-- 將 YOUR_IMAGE_URL 替換成您自己的圖片連結 -->
+        <img src="{{ url_for('static', filename='LOGO01.png') }}" alt="Logo or image">
+        <h1>威智儲能電量評估系統</h1>
+    </header>
+    
+    <div class="form-container">
+        <form onsubmit="submitForm(event)">
+            <div>
+                <label for="period">請設定所有期的天數:</label>
+                <select id="period" required>
+                    <option value="30">30天</option>
+                    <option value="60">60天</option>
+                </select>
+            </div>
+            
+            <hr>
+            
+            <!-- 使用表格排版：三列，一列兩個欄位(共6期) -->
+            <table>
+                <tr>
+                    <td>
+                        <label for="consumption1">第1期電量:</label>
+                        <input type="number" id="consumption1" required>
+                        <span style="margin-left: 4px;">kWh</span>
+                    </td>
+                    <td>
+                        <label for="consumption2">第2期電量:</label>
+                        <input type="number" id="consumption2" required>
+                        <span style="margin-left: 4px;">kWh</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <label for="consumption3">第3期電量:</label>
+                        <input type="number" id="consumption3" required>
+                        <span style="margin-left: 4px;">kWh</span>
+                    </td>
+                    <td>
+                        <label for="consumption4">第4期電量:</label>
+                        <input type="number" id="consumption4" required>
+                        <span style="margin-left: 4px;">kWh</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <label for="consumption5">第5期電量:</label>
+                        <input type="number" id="consumption5" required>
+                        <span style="margin-left: 4px;">kWh</span>
+                    </td>
+                    <td>
+                        <label for="consumption6">第6期電量:</label>
+                        <input type="number" id="consumption6" required>
+                        <span style="margin-left: 4px;">kWh</span>
+                    </td>
+                </tr>
+            </table>
+            
+            <div style="margin-top:20px;">
+                <button type="submit">送出</button>
+            </div>
+        </form>
+    </div>
+    
+    <div id="result"></div>
+
+    <!-- 放置圖表的 canvas -->
+    <div id="chartContainer">
+        <canvas id="myChart"></canvas>
+    </div>
+</body>
+</html>
